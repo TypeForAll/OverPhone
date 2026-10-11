@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: overphone
+      POSTGRES_USER: overphone
+      POSTGRES_PASSWORD: development-only-change-me
+    ports: ["5432:5432"]
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+  backend:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://overphone:development-only-change-me@postgres:5432/overphone?schema=public
+    depends_on: [postgres]
+    ports: ["3001:3001"]
+volumes:
+  postgres_data:
