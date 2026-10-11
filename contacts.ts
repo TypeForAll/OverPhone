@@ -1,0 +1,14 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import { prisma } from '../lib/prisma.js';
+import { asyncRoute, AppError, routeParam } from '../lib/http.js';
+import { requireAuth } from '../middleware/auth.js';
+import { normalizeOverPhoneNumber } from '../services/numbers.js';
+const router = Router(); router.use(requireAuth);
+const userSelect = { id: true, username: true, displayName: true, avatarUrl: true, number: { select: { e164: true } } } as const;
+router.get('/lookup/:number', asyncRoute(async (req, res) => { const found = await prisma.phoneNumber.findUnique({ where: { e164: normalizeOverPhoneNumber(routeParam(req.params.number)) }, include: { user: { select: userSelect } } }); if (!found?.user) throw new AppError(404, 'OverPhone user not found'); res.json({ user: found.user }); }));
+router.get('/', asyncRoute(async (req, res) => { const query = typeof req.query.q === 'string' ? req.query.q : ''; const contacts = await prisma.contact.findMany({ where: { ownerId: req.userId, displayName: { contains: query, mode: 'insensitive' } }, include: { targetUser: { select: userSelect } }, orderBy: { displayName: 'asc' } }); res.json({ contacts }); }));
+router.post('/', asyncRoute(async (req, res) => { const body = z.object({ number: z.string(), displayName: z.string().min(1).max(80), notes: z.string().max(1000).optional() }).parse(req.body); const phone = await prisma.phoneNumber.findUnique({ where: { e164: normalizeOverPhoneNumber(body.number) } }); if (!phone?.userId) throw new AppError(404, 'OverPhone user not found'); if (phone.userId === req.userId) throw new AppError(400, 'You cannot add yourself'); try { const contact = await prisma.contact.create({ data: { ownerId: req.userId!, targetUserId: phone.userId, displayName: body.displayName, notes: body.notes }, include: { targetUser: { select: userSelect } } }); res.status(201).json({ contact }); } catch (error: any) { if (error.code === 'P2002') throw new AppError(409, 'Contact already exists'); throw error; } }));
+router.patch('/:id', asyncRoute(async (req, res) => { const body = z.object({ displayName: z.string().min(1).max(80).optional(), notes: z.string().max(1000).nullable().optional() }).parse(req.body); const updated = await prisma.contact.updateMany({ where: { id: routeParam(req.params.id), ownerId: req.userId }, data: body }); if (!updated.count) throw new AppError(404, 'Contact not found'); res.status(204).end(); }));
+router.delete('/:id', asyncRoute(async (req, res) => { const deleted = await prisma.contact.deleteMany({ where: { id: routeParam(req.params.id), ownerId: req.userId } }); if (!deleted.count) throw new AppError(404, 'Contact not found'); res.status(204).end(); }));
+export default router;
