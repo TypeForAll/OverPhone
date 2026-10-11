@@ -1,0 +1,9 @@
+import { useState } from 'react';
+import { api } from '../api/client';
+
+export default function Auth({ onLogin }: { onLogin: () => Promise<void> }) {
+  const [register, setRegister] = useState(false); const [error, setError] = useState('');
+  const [form, setForm] = useState({ email: '', password: '', username: '', countryIso: 'US' });
+  async function submit(event: React.FormEvent) { event.preventDefault(); setError(''); try { if (register) { await api('/auth/register', { method: 'POST', body: JSON.stringify(form) }); } else { await api('/auth/login', { method: 'POST', body: JSON.stringify({ email: form.email, password: form.password }) }); } await onLogin(); } catch (error: any) { setError(error.message); } }
+  return <main className="auth"><div><h1>OverPhone</h1><p>Private calling and messaging over the internet. No personal phone number required.</p><form onSubmit={submit}>{register && <><label>Username<input required minLength={3} value={form.username} onChange={event => setForm({ ...form, username: event.target.value })} /></label><label>Country ISO code<input required maxLength={2} value={form.countryIso} onChange={event => setForm({ ...form, countryIso: event.target.value.toUpperCase() })} /></label></>}<label>Email<input type="email" required value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} /></label><label>Password<input type="password" minLength={12} required value={form.password} onChange={event => setForm({ ...form, password: event.target.value })} /></label>{error && <p className="error">{error}</p>}<button>{register ? 'Create account' : 'Sign in'}</button></form><button className="link" onClick={() => setRegister(!register)}>{register ? 'Already have an account? Sign in' : 'New to OverPhone? Create account'}</button></div></main>;
+}
